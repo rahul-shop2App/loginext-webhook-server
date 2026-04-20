@@ -24,7 +24,7 @@ webhookRouter.post(
   async (req: AuthedRawBodyRequest, res, next) => {
     try {
       const signature = (req.get("x-loginext-signature") ?? "").trim();
-      const secret = process.env.LOGINEXT_WEBHOOK_SECRET ?? "";
+      const secret = (process.env.LOGINEXT_WEBHOOK_SECRET ?? "").trim();
       if (!signature || !secret) return res.sendStatus(401);
 
       const computed = crypto

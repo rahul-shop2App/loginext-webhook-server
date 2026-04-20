@@ -17,8 +17,12 @@ function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
+const backendUrl = "https://loginext-webhook-server-production.up.railway.app";
+const resolvedBackendUrl =
+  (process.env.BACKEND_URL ?? "").trim().replace(/\/+$/, "") || backendUrl.replace(/\/+$/, "");
+
 export async function sendFakeWebhook(status: string) {
-  const secret = process.env.LOGINEXT_WEBHOOK_SECRET;
+  const secret = (process.env.LOGINEXT_WEBHOOK_SECRET ?? "").trim();
   if (!secret) {
     throw new Error("LOGINEXT_WEBHOOK_SECRET is missing. Set it in your .env file.");
   }
@@ -36,7 +40,7 @@ export async function sendFakeWebhook(status: string) {
   const signature = crypto.createHmac("sha256", secret).update(body).digest("hex");
 
   const fetch = getFetch();
-  const res = await fetch("http://localhost:3000/webhook/loginext", {
+  const res = await fetch(`${resolvedBackendUrl}/webhook/loginext`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
