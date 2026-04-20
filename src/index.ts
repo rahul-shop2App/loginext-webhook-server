@@ -1,0 +1,39 @@
+import dotenv from "dotenv";
+dotenv.config();
+
+import express from "express";
+import { webhookRouter } from "./routes/webhook";
+import { statusRouter } from "./routes/status";
+
+const app = express();
+
+app.use((req, _res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+app.get("/", (_req, res) => {
+  res.json({ status: "ok", timestamp: new Date() });
+});
+
+// Use JSON parsing globally, except the LogiNext webhook route which needs raw bytes for HMAC.
+app.use((req, res, next) => {
+  if (req.method === "POST" && req.path === "/webhook/loginext") return next();
+  return express.json()(req, res, next);
+});
+
+app.use("/status", statusRouter);
+app.use("/webhook", webhookRouter);
+
+// Global error handler middleware (must be last)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("Unhandled error", err);
+  res.status(500).json({ error: "Internal server error" });
+});
+
+const port = Number(process.env.PORT ?? 3000);
+app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
+});
+
