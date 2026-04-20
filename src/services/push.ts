@@ -9,19 +9,27 @@ function ensureFirebaseInitialized() {
   if (firebaseReady) return true;
   if (firebaseInitError) return false;
 
-  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
-  if (!serviceAccountPath) {
-    firebaseInitError = new Error("FIREBASE_SERVICE_ACCOUNT_PATH is missing (set it in your .env)");
-    console.warn(String(firebaseInitError));
-    return false;
-  }
-
   try {
-    const resolvedPath = path.isAbsolute(serviceAccountPath)
-      ? serviceAccountPath
-      : path.join(process.cwd(), serviceAccountPath);
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const serviceAccount = require(resolvedPath);
+    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+
+    let serviceAccount: any;
+    if (serviceAccountJson) {
+      serviceAccount = JSON.parse(serviceAccountJson);
+    } else if (serviceAccountPath) {
+      const resolvedPath = path.isAbsolute(serviceAccountPath)
+        ? serviceAccountPath
+        : path.join(process.cwd(), serviceAccountPath);
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      serviceAccount = require(resolvedPath);
+    } else {
+      firebaseInitError = new Error(
+        "Firebase credentials missing. Set FIREBASE_SERVICE_ACCOUNT_JSON (recommended) or FIREBASE_SERVICE_ACCOUNT_PATH."
+      );
+      console.warn(String(firebaseInitError));
+      return false;
+    }
+
     if (admin.apps.length === 0) {
       admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
     }
