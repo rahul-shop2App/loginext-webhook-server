@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import dotenv from "dotenv";
 import path from "path";
 
@@ -22,11 +21,6 @@ const resolvedBackendUrl =
   (process.env.BACKEND_URL ?? "").trim().replace(/\/+$/, "") || backendUrl.replace(/\/+$/, "");
 
 export async function sendFakeWebhook(status: string) {
-  const secret = (process.env.LOGINEXT_WEBHOOK_SECRET ?? "").trim();
-  if (!secret) {
-    throw new Error("LOGINEXT_WEBHOOK_SECRET is missing. Set it in your .env file.");
-  }
-
   const payload = {
     orderId: "TEST-001",
     orderStatus: status,
@@ -37,14 +31,13 @@ export async function sendFakeWebhook(status: string) {
   };
 
   const body = JSON.stringify(payload);
-  const signature = crypto.createHmac("sha256", secret).update(body).digest("hex");
 
   const fetch = getFetch();
-  const res = await fetch(`${resolvedBackendUrl}/webhook/loginext`, {
+  const res = await fetch(`${backendUrl}/webhook/loginext`, {
     method: "POST",
     headers: {
-      "content-type": "application/json",
-      "x-loginext-signature": signature
+      "Content-Type": "application/json",
+      "x-webhook-secret": process.env.LOGINEXT_WEBHOOK_SECRET || ""
     },
     body
   });

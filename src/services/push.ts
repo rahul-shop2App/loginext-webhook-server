@@ -1,5 +1,4 @@
 import * as admin from "firebase-admin";
-import path from "path";
 import { getFcmTokens, removeFcmTokens } from "../store";
 
 let firebaseReady = false;
@@ -10,32 +9,42 @@ function ensureFirebaseInitialized() {
   if (firebaseInitError) return false;
 
   try {
-    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
-
-    let serviceAccount: any;
-    if (serviceAccountJson) {
-      serviceAccount = JSON.parse(serviceAccountJson);
-    } else if (serviceAccountPath) {
-      const resolvedPath = path.isAbsolute(serviceAccountPath)
-        ? serviceAccountPath
-        : path.join(process.cwd(), serviceAccountPath);
+    function getServiceAccount() {
+      if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+        const parsed = JSON.parse(raw);
+        // Fix escaped newlines in private_key
+        if (parsed.private_key) {
+          parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
+        }
+        return parsed;
+      }
+      if (!process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+        throw new Error(
+          "Firebase credentials missing. Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_PATH."
+        );
+      }
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      serviceAccount = require(resolvedPath);
-    } else {
-      firebaseInitError = new Error(
-        "Firebase credentials missing. Set FIREBASE_SERVICE_ACCOUNT_JSON (recommended) or FIREBASE_SERVICE_ACCOUNT_PATH."
-      );
-      console.warn(String(firebaseInitError));
-      return false;
+      return require(process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
     }
 
+    const serviceAccount = getServiceAccount();
     if (admin.apps.length === 0) {
       admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
     }
     firebaseReady = true;
     return true;
   } catch (err) {
+    if (
+      err instanceof Error &&
+      err.message.includes("Firebase credentials missing. Set FIREBASE_SERVICE_ACCOUNT_JSON")
+    ) {
+      firebaseInitError = new Error(
+        "Firebase credentials missing. Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_PATH."
+      );
+      console.warn(String(firebaseInitError));
+      return false;
+    }
     firebaseInitError = err;
     console.error("Failed to initialize Firebase Admin SDK", err);
     return false;
