@@ -1,38 +1,19 @@
-import crypto from "crypto";
 import express, { Router, type Request } from "express";
 import { setOrder } from "../store";
 import { sendPushToOrder } from "../services/push";
 
 export const webhookRouter = Router();
 
-type AuthedRawBodyRequest = Request & { body: Buffer };
-
-function safeEqualHex(aHex: string, bHex: string) {
-  try {
-    const a = Buffer.from(aHex, "hex");
-    const b = Buffer.from(bHex, "hex");
-    if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
-  } catch {
-    return false;
-  }
-}
-
 webhookRouter.post(
   "/loginext",
-  express.raw({ type: "application/json" }),
-  async (req: AuthedRawBodyRequest, res, next) => {
+  express.json(),
+  async (req: Request, res, next) => {
     try {
-      const signature = (req.get("x-loginext-signature") ?? "").trim();
-      const secret = (process.env.LOGINEXT_WEBHOOK_SECRET ?? "").trim();
-      if (!signature || !secret) return res.sendStatus(401);
-
-      const computed = crypto
-        .createHmac("sha256", secret)
-        .update(req.body)
-        .digest("hex");
-
-      if (!safeEqualHex(signature, computed)) return res.sendStatus(401);
+      const webhookSecret = req.get("x-webhook-secret");
+      const expectedSecret = process.env.LOGINEXT_WEBHOOK_SECRET;
+      if (!webhookSecret || !expectedSecret || webhookSecret !== expectedSecret) {
+        return res.sendStatus(401);
+      }
 
       res.sendStatus(200);
 
@@ -43,9 +24,10 @@ webhookRouter.post(
   }
 );
 
-async function processWebhook(body: Buffer) {
+async function processWebhook(body: unknown) {
   try {
-    const payload = JSON.parse(body.toString("utf8")) as Record<string, unknown>;
+    if (!body || typeof body !== "object") return;
+    const payload = body as Record<string, unknown>;
 
     const orderId = String(payload.orderId ?? "");
     const orderStatus = String(payload.orderStatus ?? "");
