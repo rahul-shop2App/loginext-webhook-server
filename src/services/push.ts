@@ -52,9 +52,11 @@ const statusToNotification: Record<string, { title: string; body: string }> = {
 };
 
 export async function sendPushToOrder(orderId: string, status: string) {
+  console.log("sendPushToOrder called for orderId:", orderId);
   if (!ensureFirebaseInitialized()) return;
 
   const tokens = getFcmTokens(orderId);
+  console.log("Tokens:", tokens);
   if (!tokens.length) {
     console.log(`No FCM tokens registered for orderId=${orderId}`);
     return;
@@ -64,18 +66,19 @@ export async function sendPushToOrder(orderId: string, status: string) {
     statusToNotification[status] ?? { title: "Order update", body: `Status updated: ${status}` };
 
   try {
-    const resp = await admin.messaging().sendEachForMulticast({
+    const result = await admin.messaging().sendEachForMulticast({
       tokens,
       notification,
       data: { orderId, status }
     });
+    console.log("Firebase send result:", JSON.stringify(result));
 
     console.log(
-      `FCM multicast for orderId=${orderId} status=${status} success=${resp.successCount} failure=${resp.failureCount}`
+      `FCM multicast for orderId=${orderId} status=${status} success=${result.successCount} failure=${result.failureCount}`
     );
 
     const invalidTokens: string[] = [];
-    resp.responses.forEach((r, idx) => {
+    result.responses.forEach((r, idx) => {
       if (r.success) return;
       const code = r.error?.code ?? "";
       if (code === "messaging/registration-token-not-registered") {
@@ -87,8 +90,8 @@ export async function sendPushToOrder(orderId: string, status: string) {
       removeFcmTokens(orderId, invalidTokens);
       console.log(`Removed ${invalidTokens.length} invalid FCM tokens for orderId=${orderId}`);
     }
-  } catch (err) {
-    console.error("FCM send error", err);
+  } catch (err: unknown) {
+    console.error("FCM send error (full object):", err);
   }
 }
 

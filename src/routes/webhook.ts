@@ -1,5 +1,5 @@
 import express, { Router, type Request } from "express";
-import { setOrder } from "../store";
+import { getFcmTokens, setOrder } from "../store";
 import { sendPushToOrder } from "../services/push";
 
 export const webhookRouter = Router();
@@ -32,6 +32,7 @@ async function processWebhook(body: unknown) {
     const orderId = String(payload.orderId ?? "");
     const orderStatus = String(payload.orderStatus ?? "");
     if (!orderId) return;
+    console.log("Processing webhook for orderId:", orderId, "status:", orderStatus);
 
     const latitudeRaw = payload.latitude;
     const longitudeRaw = payload.longitude;
@@ -55,7 +56,10 @@ async function processWebhook(body: unknown) {
       updatedAt: new Date().toISOString()
     });
 
+    const tokens = getFcmTokens(orderId);
+    console.log("FCM tokens found:", tokens.length);
     await sendPushToOrder(orderId, orderStatus);
+    console.log("Push function called");
   } catch (err) {
     console.error("Webhook async processing error", err);
   }

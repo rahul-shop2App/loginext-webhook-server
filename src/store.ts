@@ -26,7 +26,9 @@ export function registerFcmToken(orderId: string, token: string) {
 }
 
 export function getFcmTokens(orderId: string) {
-  return orderFcmTokens.get(orderId) ?? [];
+  const tokens = orderFcmTokens.get(orderId) ?? [];
+  console.log("Getting tokens for orderId:", orderId, "found:", tokens);
+  return tokens;
 }
 
 export function removeFcmTokens(orderId: string, tokensToRemove: string[]) {
