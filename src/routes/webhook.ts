@@ -11,6 +11,11 @@ webhookRouter.post(
     try {
       const webhookSecret = req.get("x-webhook-secret");
       const expectedSecret = process.env.LOGINEXT_WEBHOOK_SECRET;
+      console.log("=== LOGINEXT INCOMING ===");
+      console.log("All headers:", JSON.stringify(req.headers, null, 2));
+      console.log("Secret received:", req.headers["x-webhook-secret"]);
+      console.log("Secret expected:", process.env.WEBHOOK_SECRET);
+      console.log("Body:", JSON.stringify(req.body, null, 2));
       if (!webhookSecret || !expectedSecret || webhookSecret !== expectedSecret) {
         return res.sendStatus(401);
       }
