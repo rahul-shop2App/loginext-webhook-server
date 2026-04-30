@@ -14,7 +14,7 @@ webhookRouter.post(
       console.log("=== LOGINEXT INCOMING ===");
       console.log("All headers:", JSON.stringify(req.headers, null, 2));
       console.log("Secret received:", req.headers["x-webhook-secret"]);
-      console.log("Secret expected:", process.env.WEBHOOK_SECRET);
+      console.log("Secret expected:", process.env.LOGINEXT_WEBHOOK_SECRET);
       console.log("Body:", JSON.stringify(req.body, null, 2));
       if (!webhookSecret || !expectedSecret || webhookSecret !== expectedSecret) {
         return res.sendStatus(401);
@@ -34,7 +34,10 @@ async function processWebhook(body: unknown) {
     if (!body || typeof body !== "object") return;
     const payload = body as Record<string, unknown>;
 
-    const orderId = String(payload.orderId ?? "");
+    // LogiNext sends awbNumber/orderNo/orderReferenceId, not orderId
+    const orderId = String(
+      payload.orderId ?? payload.awbNumber ?? payload.orderNo ?? payload.orderReferenceId ?? ""
+    );
     const orderStatus = String(payload.orderStatus ?? "");
     if (!orderId) return;
     console.log("Processing webhook for orderId:", orderId, "status:", orderStatus);
