@@ -4,6 +4,7 @@ dotenv.config();
 import express from "express";
 import { webhookRouter } from "./routes/webhook";
 import { statusRouter } from "./routes/status";
+import { testFirebasePush } from "./services/push";
 
 const app = express();
 
@@ -24,6 +25,14 @@ app.use((req, res, next) => {
 
 app.use("/status", statusRouter);
 app.use("/webhook", webhookRouter);
+
+app.post("/debug/test-push", async (req, res) => {
+  const { token } = req.body ?? {};
+  if (!token) return res.status(400).json({ error: "token required" });
+  const result = await testFirebasePush(String(token));
+  console.log("Debug test-push result:", JSON.stringify(result));
+  return res.json(result);
+});
 
 // Global error handler middleware (must be last)
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

@@ -60,12 +60,31 @@ const statusToNotification: Record<string, { title: string; body: string }> = {
   IN_TRANSIT: { title: "In transit", body: "Your order is moving" }
 };
 
+export async function testFirebasePush(token: string): Promise<object> {
+  if (!ensureFirebaseInitialized()) {
+    return { error: "Firebase not initialized", detail: String(firebaseInitError) };
+  }
+  try {
+    const result = await admin.messaging().sendEachForMulticast({
+      tokens: [token],
+      notification: { title: "Test", body: "Push test from Railway" },
+      data: { test: "true" }
+    });
+    return result;
+  } catch (err) {
+    return { error: String(err) };
+  }
+}
+
 export async function sendPushToOrder(orderId: string, status: string) {
   console.log("sendPushToOrder called for orderId:", orderId);
-  if (!ensureFirebaseInitialized()) return;
+  if (!ensureFirebaseInitialized()) {
+    console.error("Firebase not initialized, skipping push. Error:", String(firebaseInitError));
+    return;
+  }
 
   const tokens = getFcmTokens(orderId);
-  console.log("Tokens:", tokens);
+  console.log("Tokens for push:", tokens.length, tokens);
   if (!tokens.length) {
     console.log(`No FCM tokens registered for orderId=${orderId}`);
     return;
