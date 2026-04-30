@@ -11,6 +11,7 @@ statusRouter.get("/order/:orderId", (req, res) => {
 
 statusRouter.post("/register-token", (req, res) => {
   const { orderId, fcmToken } = req.body ?? {};
+  console.log("Registering token:", JSON.stringify({ orderId, fcmToken }));
   if (!orderId || !fcmToken) {
     return res.status(400).json({ error: "orderId and fcmToken are required" });
   }
