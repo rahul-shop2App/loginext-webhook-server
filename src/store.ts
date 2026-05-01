@@ -1,5 +1,3 @@
-import { getFirestoreOrNull } from "./firebase-admin";
-
 export type OrderState = {
   orderId: string;
   status: string;
@@ -68,22 +66,10 @@ export async function registerTokensForKeys(keys: CandidateKey[], token: string)
   const canonicalKeys = dedupedCanonical(keys);
   if (!canonicalKeys.length) return [];
 
-  const db = getFirestoreOrNull();
   for (const key of canonicalKeys) {
     const set = tokenCache.get(key) ?? new Set<string>();
     set.add(token);
     tokenCache.set(key, set);
-
-    if (db) {
-      try {
-        await db
-          .collection("fcm_tokens")
-          .doc(key)
-          .set({ tokens: Array.from(set), updatedAt: new Date().toISOString() });
-      } catch (err) {
-        console.error("Failed to persist FCM token to Firestore:", err);
-      }
-    }
   }
   console.log("Registered FCM token under canonical keys:", canonicalKeys);
   return canonicalKeys;
@@ -97,37 +83,17 @@ export type TokenLookup = {
 };
 
 export async function getTokensForAnyKey(keys: CandidateKey[]): Promise<TokenLookup> {
-  const db = getFirestoreOrNull();
   for (const k of keys) {
     const canonical = canonicalize(k.raw, k.kind);
     if (!canonical) continue;
 
-    if (tokenCache.has(canonical)) {
-      const tokens = Array.from(tokenCache.get(canonical)!);
-      if (tokens.length) {
-        console.log(
-          `Token match (cache): kind=${k.kind} raw=${k.raw} canonical=${canonical} tokens=${tokens.length}`
-        );
-        return { tokens, matchedKey: canonical, matchedRaw: k.raw, matchedKind: k.kind };
-      }
-    }
-
-    if (db) {
-      try {
-        const snap = await db.collection("fcm_tokens").doc(canonical).get();
-        if (snap.exists) {
-          const tokens = (snap.data()?.tokens as string[]) ?? [];
-          if (tokens.length) {
-            tokenCache.set(canonical, new Set(tokens));
-            console.log(
-              `Token match (Firestore): kind=${k.kind} raw=${k.raw} canonical=${canonical} tokens=${tokens.length}`
-            );
-            return { tokens, matchedKey: canonical, matchedRaw: k.raw, matchedKind: k.kind };
-          }
-        }
-      } catch (err) {
-        console.error("Failed to fetch FCM tokens from Firestore:", err);
-      }
+    const set = tokenCache.get(canonical);
+    if (set && set.size) {
+      const tokens = Array.from(set);
+      console.log(
+        `Token match: kind=${k.kind} raw=${k.raw} canonical=${canonical} tokens=${tokens.length}`
+      );
+      return { tokens, matchedKey: canonical, matchedRaw: k.raw, matchedKind: k.kind };
     }
   }
 
@@ -144,20 +110,5 @@ export async function removeInvalidTokens(invalid: string[]) {
   for (const set of tokenCache.values()) {
     for (const t of invalid) set.delete(t);
   }
-
-  const db = getFirestoreOrNull();
-  if (!db) return;
-
-  for (const t of invalid) {
-    try {
-      const snap = await db.collection("fcm_tokens").where("tokens", "array-contains", t).get();
-      for (const doc of snap.docs) {
-        const remaining = ((doc.data().tokens as string[]) ?? []).filter((x) => x !== t);
-        await doc.ref.set({ tokens: remaining, updatedAt: new Date().toISOString() });
-      }
-    } catch (err) {
-      console.error(`Failed to remove invalid token ${t} from Firestore:`, err);
-    }
-  }
-  console.log(`Cleaned up ${invalid.length} invalid token(s)`);
+  console.log(`Cleaned up ${invalid.length} invalid token(s) from in-memory cache`);
 }

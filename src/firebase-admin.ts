@@ -38,12 +38,3 @@ export function ensureFirebaseInitialized(): boolean {
     return false;
   }
 }
-
-export function getFirestoreOrNull(): admin.firestore.Firestore | null {
-  if (!firebaseReady) return null;
-  try {
-    return admin.firestore();
-  } catch {
-    return null;
-  }
-}
