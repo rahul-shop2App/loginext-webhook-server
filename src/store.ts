@@ -8,22 +8,26 @@ export type OrderState = {
   updatedAt: string;
 };
 
-export type KeyKind = "uuid" | "digits" | "raw";
+export type KeyKind = "uuid" | "digits" | "customer_id" | "raw";
 export type CandidateKey = { raw: string; kind: KeyKind };
 
 const orders = new Map<string, OrderState>();
 const tokenCache = new Map<string, Set<string>>();
 
 // Canonical form per kind:
-// - "digits": last 9 digits (matches phone, awbNumber, deliverAccountCode, orderNo across formats)
-// - "uuid":   lowercase, strip non-alphanumerics (so dashed and undashed UUIDs collide)
-// - "raw":    trim + lowercase (shopify order names like "#1234", GIDs)
+// - "digits":      last 9 digits (matches phone, awbNumber, orderNo across formats)
+// - "customer_id": full digits, no truncation (Shopify customer IDs are 13 digits and must match exactly)
+// - "uuid":        lowercase, strip non-alphanumerics (so dashed and undashed UUIDs collide)
+// - "raw":         trim + lowercase (shopify order names like "#1234", GIDs)
 export function canonicalize(raw: string, kind: KeyKind): string {
   const trimmed = (raw ?? "").trim();
   if (!trimmed) return "";
   if (kind === "digits") {
     const digits = trimmed.replace(/\D/g, "");
     return digits.length >= 9 ? digits.slice(-9) : digits;
+  }
+  if (kind === "customer_id") {
+    return trimmed.replace(/\D/g, "");
   }
   if (kind === "uuid") {
     return trimmed.toLowerCase().replace(/[^a-z0-9]/g, "");

@@ -36,10 +36,10 @@ function buildCandidateKeys(payload: Record<string, unknown>): CandidateKey[] {
     if (s) keys.push({ raw: s, kind });
   };
   push(payload.orderReferenceId, "uuid");
-  push(payload.orderNo, "digits");           // matches Shopify order_number from iOS
-  push(payload.deliverAccountCode, "digits");
+  push(payload.orderNo, "digits");                       // matches Shopify order_number from iOS
+  push(payload.deliverAccountCode, "customer_id");        // matches iOS shopifyCustomerId (full digits, no truncation)
   push(payload.awbNumber, "digits");
-  push(payload.phoneNumber, "digits");        // fallback — note: this is rider phone in some payloads
+  push(payload.phoneNumber, "digits");                    // fallback — note: this is rider phone in some payloads
   return keys;
 }
 
@@ -79,6 +79,12 @@ async function processWebhook(body: unknown) {
     setOrder(orderState, candidateKeys);
 
     const { tokens, matchedKey, matchedRaw, matchedKind } = await getTokensForAnyKey(candidateKeys);
+
+    console.log("=== WEBHOOK MATCH ===");
+    console.log("Tried keys:", candidateKeys.map((k) => k.raw));
+    console.log("Matched via:", matchedKey ?? "none");
+    console.log("Tokens found:", tokens.length);
+
     if (matchedKey) {
       console.log(
         `Push target: kind=${matchedKind} raw=${matchedRaw} canonical=${matchedKey} tokens=${tokens.length}`
