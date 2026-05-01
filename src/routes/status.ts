@@ -43,6 +43,7 @@ statusRouter.post("/register-token", async (req, res) => {
     keys.map((k) => `${k.kind}:${k.raw}`).join(", ")
   );
 
-  const registered = await registerTokensForKeys(keys, fcmToken);
-  return res.status(200).json({ ok: true, keys: registered });
+  const canonicalKeys = await registerTokensForKeys(keys, fcmToken);
+  console.log('=== REGISTERED FCM TOKEN ===', fcmToken, 'for keys:', canonicalKeys)
+  return res.status(200).json({ ok: true, keys: canonicalKeys });
 });
