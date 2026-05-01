@@ -1,55 +1,6 @@
 import * as admin from "firebase-admin";
-import { getFcmTokens, removeFcmTokens } from "../store";
-
-let firebaseReady = false;
-let firebaseInitError: unknown = null;
-
-function ensureFirebaseInitialized() {
-  if (firebaseReady) return true;
-  if (firebaseInitError) return false;
-
-  try {
-    function getServiceAccount() {
-      if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-        const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-        const parsed = JSON.parse(raw);
-        // Fix escaped newlines in private_key
-        if (parsed.private_key) {
-          parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
-        }
-        return parsed;
-      }
-      if (!process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
-        throw new Error(
-          "Firebase credentials missing. Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_PATH."
-        );
-      }
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      return require(process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
-    }
-
-    const serviceAccount = getServiceAccount();
-    if (admin.apps.length === 0) {
-      admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-    }
-    firebaseReady = true;
-    return true;
-  } catch (err) {
-    if (
-      err instanceof Error &&
-      err.message.includes("Firebase credentials missing. Set FIREBASE_SERVICE_ACCOUNT_JSON")
-    ) {
-      firebaseInitError = new Error(
-        "Firebase credentials missing. Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_PATH."
-      );
-      console.warn(String(firebaseInitError));
-      return false;
-    }
-    firebaseInitError = err;
-    console.error("Failed to initialize Firebase Admin SDK", err);
-    return false;
-  }
-}
+import { ensureFirebaseInitialized } from "../firebase-admin";
+import { removeInvalidTokens } from "../store";
 
 const statusToNotification: Record<string, { title: string; body: string }> = {
   PICKED_UP: { title: "Order picked up", body: "Your order is on the way!" },
@@ -62,31 +13,26 @@ const statusToNotification: Record<string, { title: string; body: string }> = {
 
 export async function testFirebasePush(token: string): Promise<object> {
   if (!ensureFirebaseInitialized()) {
-    return { error: "Firebase not initialized", detail: String(firebaseInitError) };
+    return { error: "Firebase not initialized" };
   }
   try {
-    const result = await admin.messaging().sendEachForMulticast({
+    return await admin.messaging().sendEachForMulticast({
       tokens: [token],
       notification: { title: "Test", body: "Push test from Railway" },
       data: { test: "true" }
     });
-    return result;
   } catch (err) {
     return { error: String(err) };
   }
 }
 
-export async function sendPushToOrder(orderId: string, status: string) {
-  console.log("sendPushToOrder called for orderId:", orderId);
-  if (!ensureFirebaseInitialized()) {
-    console.error("Firebase not initialized, skipping push. Error:", String(firebaseInitError));
+export async function sendPushToTokens(tokens: string[], orderId: string, status: string) {
+  if (!tokens.length) {
+    console.log(`No tokens to push for orderId=${orderId}`);
     return;
   }
-
-  const tokens = getFcmTokens(orderId);
-  console.log("Tokens for push:", tokens.length, tokens);
-  if (!tokens.length) {
-    console.log(`No FCM tokens registered for orderId=${orderId}`);
+  if (!ensureFirebaseInitialized()) {
+    console.error("Firebase not initialized, skipping push.");
     return;
   }
 
@@ -99,27 +45,21 @@ export async function sendPushToOrder(orderId: string, status: string) {
       notification,
       data: { orderId, status }
     });
-    console.log("Firebase send result:", JSON.stringify(result));
-
     console.log(
-      `FCM multicast for orderId=${orderId} status=${status} success=${result.successCount} failure=${result.failureCount}`
+      `FCM multicast orderId=${orderId} status=${status} success=${result.successCount} failure=${result.failureCount}`
     );
 
-    const invalidTokens: string[] = [];
+    const invalid: string[] = [];
     result.responses.forEach((r, idx) => {
       if (r.success) return;
-      const code = r.error?.code ?? "";
-      if (code === "messaging/registration-token-not-registered") {
-        invalidTokens.push(tokens[idx]);
+      if (r.error?.code === "messaging/registration-token-not-registered") {
+        invalid.push(tokens[idx]);
       }
     });
-
-    if (invalidTokens.length) {
-      removeFcmTokens(orderId, invalidTokens);
-      console.log(`Removed ${invalidTokens.length} invalid FCM tokens for orderId=${orderId}`);
+    if (invalid.length) {
+      await removeInvalidTokens(invalid);
     }
-  } catch (err: unknown) {
-    console.error("FCM send error (full object):", err);
+  } catch (err) {
+    console.error("FCM send error:", err);
   }
 }
-

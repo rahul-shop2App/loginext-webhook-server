@@ -2,9 +2,13 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import express from "express";
+import { ensureFirebaseInitialized } from "./firebase-admin";
 import { webhookRouter } from "./routes/webhook";
 import { statusRouter } from "./routes/status";
 import { testFirebasePush } from "./services/push";
+
+// Initialize Firebase at startup so Firestore is ready for token registration
+ensureFirebaseInitialized();
 
 const app = express();
 
@@ -45,4 +49,3 @@ const port = Number(process.env.PORT ?? 3000);
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
-

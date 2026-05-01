@@ -1,6 +1,6 @@
 import express, { Router, type Request } from "express";
-import { getFcmTokens, setOrder } from "../store";
-import { sendPushToOrder } from "../services/push";
+import { setOrder, getTokensForAnyKey, type CandidateKey } from "../store";
+import { sendPushToTokens } from "../services/push";
 
 export const webhookRouter = Router();
 
@@ -13,15 +13,12 @@ webhookRouter.post(
       const expectedSecret = process.env.LOGINEXT_WEBHOOK_SECRET;
       console.log("=== LOGINEXT INCOMING ===");
       console.log("All headers:", JSON.stringify(req.headers, null, 2));
-      console.log("Secret received:", req.headers["x-webhook-secret"]);
-      console.log("Secret expected:", process.env.LOGINEXT_WEBHOOK_SECRET);
       console.log("Body:", JSON.stringify(req.body, null, 2));
       if (!webhookSecret || !expectedSecret || webhookSecret !== expectedSecret) {
         return res.sendStatus(401);
       }
 
       res.sendStatus(200);
-
       setImmediate(() => processWebhook(req.body));
     } catch (err) {
       next(err);
@@ -29,47 +26,68 @@ webhookRouter.post(
   }
 );
 
+// Priority order for matching against registered FCM tokens.
+// orderReferenceId (UUID) is most unique; phone is last-resort fallback.
+function buildCandidateKeys(payload: Record<string, unknown>): CandidateKey[] {
+  const keys: CandidateKey[] = [];
+  const push = (raw: unknown, kind: CandidateKey["kind"]) => {
+    if (raw == null) return;
+    const s = String(raw).trim();
+    if (s) keys.push({ raw: s, kind });
+  };
+  push(payload.orderReferenceId, "uuid");
+  push(payload.orderNo, "digits");           // matches Shopify order_number from iOS
+  push(payload.deliverAccountCode, "digits");
+  push(payload.awbNumber, "digits");
+  push(payload.phoneNumber, "digits");        // fallback — note: this is rider phone in some payloads
+  return keys;
+}
+
 async function processWebhook(body: unknown) {
   try {
     if (!body || typeof body !== "object") return;
     const payload = body as Record<string, unknown>;
 
-    // LogiNext sends awbNumber/orderNo/orderReferenceId, not orderId
-    const orderId = String(
-      payload.orderId ?? payload.awbNumber ?? payload.orderNo ?? payload.orderReferenceId ?? ""
-    );
+    const candidateKeys = buildCandidateKeys(payload);
     const orderStatus = String(payload.orderStatus ?? "");
-    if (!orderId) return;
-    console.log("Processing webhook for orderId:", orderId, "status:", orderStatus);
 
-    const latitudeRaw = payload.latitude;
-    const longitudeRaw = payload.longitude;
-    const latitude =
-      typeof latitudeRaw === "number" ? latitudeRaw : latitudeRaw ? Number(latitudeRaw) : undefined;
-    const longitude =
-      typeof longitudeRaw === "number" ? longitudeRaw : longitudeRaw ? Number(longitudeRaw) : undefined;
+    if (!candidateKeys.length) {
+      console.warn("Webhook has no recognizable order keys; skipping");
+      return;
+    }
 
-    const deliveryAgentName =
-      payload.deliveryAgentName != null ? String(payload.deliveryAgentName) : undefined;
-    const estimatedDeliveryTime =
-      payload.estimatedDeliveryTime != null ? String(payload.estimatedDeliveryTime) : undefined;
+    console.log(
+      `Processing webhook status=${orderStatus} candidates=[${candidateKeys
+        .map((k) => `${k.kind}:${k.raw}`)
+        .join(", ")}]`
+    );
 
-    setOrder({
-      orderId,
+    const lat = Number(payload.latitude);
+    const lng = Number(payload.longitude);
+
+    const orderState = {
+      orderId: candidateKeys[0].raw,
       status: orderStatus,
-      latitude,
-      longitude,
-      deliveryAgentName,
-      estimatedDeliveryTime,
+      latitude: Number.isFinite(lat) ? lat : undefined,
+      longitude: Number.isFinite(lng) ? lng : undefined,
+      deliveryAgentName:
+        payload.deliveryAgentName != null ? String(payload.deliveryAgentName) : undefined,
+      estimatedDeliveryTime:
+        payload.estimatedDeliveryTime != null ? String(payload.estimatedDeliveryTime) : undefined,
       updatedAt: new Date().toISOString()
-    });
+    };
+    setOrder(orderState, candidateKeys);
 
-    const tokens = getFcmTokens(orderId);
-    console.log("FCM tokens found:", tokens.length);
-    await sendPushToOrder(orderId, orderStatus);
-    console.log("Push function called");
+    const { tokens, matchedKey, matchedRaw, matchedKind } = await getTokensForAnyKey(candidateKeys);
+    if (matchedKey) {
+      console.log(
+        `Push target: kind=${matchedKind} raw=${matchedRaw} canonical=${matchedKey} tokens=${tokens.length}`
+      );
+      await sendPushToTokens(tokens, orderState.orderId, orderStatus);
+    } else {
+      console.log("No tokens registered for any candidate key — push skipped");
+    }
   } catch (err) {
     console.error("Webhook async processing error", err);
   }
 }
-
