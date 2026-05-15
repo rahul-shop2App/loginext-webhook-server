@@ -9,6 +9,7 @@ export type OrderState = {
   orderNo: string | null;
   awbNumber: string | null;
   notificationType: string | null;
+  reason: string | null;
   updatedAt: string;
 };
 

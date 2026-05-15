@@ -76,6 +76,7 @@ async function processWebhook(body: unknown) {
       orderNo: payload.orderNo != null ? String(payload.orderNo) : null,
       awbNumber: payload.awbNumber != null ? String(payload.awbNumber) : null,
       notificationType: payload.notificationType != null ? String(payload.notificationType) : null,
+      reason: payload.reason != null ? String(payload.reason) : null,
       updatedAt: new Date().toISOString()
     };
     setOrder(orderState, candidateKeys);
