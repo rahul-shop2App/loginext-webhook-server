@@ -5,7 +5,7 @@ export const statusRouter = Router();
 
 statusRouter.get("/order/:orderId", (req, res) => {
   const order = getOrder(req.params.orderId);
-  if (!order) return res.status(404).json({ error: "Order not found" });
+  if (!order) return res.status(404).json({ error: "Order not found", orderId: req.params.orderId });
   return res.json(order);
 });
 

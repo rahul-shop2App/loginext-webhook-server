@@ -1,10 +1,14 @@
 export type OrderState = {
   orderId: string;
   status: string;
-  latitude?: number;
-  longitude?: number;
-  deliveryAgentName?: string;
-  estimatedDeliveryTime?: string;
+  deliveryAgentName: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  estimatedDeliveryTime: string | null;
+  branchName: string | null;
+  orderNo: string | null;
+  awbNumber: string | null;
+  notificationType: string | null;
   updatedAt: string;
 };
 

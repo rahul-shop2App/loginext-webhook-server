@@ -62,18 +62,20 @@ async function processWebhook(body: unknown) {
         .join(", ")}]`
     );
 
-    const lat = Number(payload.latitude);
-    const lng = Number(payload.longitude);
+    const lat = Number(payload.deliverLatitude ?? payload.latitude);
+    const lng = Number(payload.deliverLongitude ?? payload.longitude);
 
     const orderState = {
-      orderId: candidateKeys[0].raw,
+      orderId: candidateKeys[0]?.raw ?? "",
       status: orderStatus,
-      latitude: Number.isFinite(lat) ? lat : undefined,
-      longitude: Number.isFinite(lng) ? lng : undefined,
-      deliveryAgentName:
-        payload.deliveryAgentName != null ? String(payload.deliveryAgentName) : undefined,
-      estimatedDeliveryTime:
-        payload.estimatedDeliveryTime != null ? String(payload.estimatedDeliveryTime) : undefined,
+      deliveryAgentName: payload.deliveryMediumName != null ? String(payload.deliveryMediumName) : null,
+      latitude: Number.isFinite(lat) ? lat : null,
+      longitude: Number.isFinite(lng) ? lng : null,
+      estimatedDeliveryTime: payload.endTimeWindow != null ? String(payload.endTimeWindow) : null,
+      branchName: payload.branchName != null ? String(payload.branchName) : null,
+      orderNo: payload.orderNo != null ? String(payload.orderNo) : null,
+      awbNumber: payload.awbNumber != null ? String(payload.awbNumber) : null,
+      notificationType: payload.notificationType != null ? String(payload.notificationType) : null,
       updatedAt: new Date().toISOString()
     };
     setOrder(orderState, candidateKeys);
